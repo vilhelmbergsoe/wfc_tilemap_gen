@@ -1,10 +1,9 @@
-use rand::seq::SliceRandom;
-use rand::Rng;
+use rand::distributions::{Distribution, WeightedIndex};
 
 const MAP_WIDTH: usize = 60;
 const MAP_HEIGHT: usize = 30;
 
-fn get_possible_tiles(map: &[Option<u8>], constraints: &[&[u8]], x: usize, y: usize) -> Vec<u8> {
+fn get_possible_tiles(map: &[Option<u8>], constraints: &[(u8, &[u8])], x: usize, y: usize) -> Vec<u8> {
     let mut neighbors: [Option<u8>; 8] = [None; 8];
 
     // BOTTOM LEFT
@@ -49,12 +48,7 @@ fn get_possible_tiles(map: &[Option<u8>], constraints: &[&[u8]], x: usize, y: us
 
     for neighbor in neighbors.iter() {
         if let Some(tile) = neighbor {
-            // for tile in constraints[*tile as usize].iter() {
-            //     if !possible_tiles.contains(tile) {
-            //         possible_tiles.push(*tile);
-            //     }
-            // }
-            let neighbor_constraints = constraints[*tile as usize];
+            let neighbor_constraints = constraints[*tile as usize].1;
             let mut allowed_tiles: Vec<u8> = Vec::new();
 
             for tile in possible_tiles.iter() {
@@ -71,19 +65,12 @@ fn get_possible_tiles(map: &[Option<u8>], constraints: &[&[u8]], x: usize, y: us
 }
 
 fn main() {
-    let mut map: [Option<u8>; MAP_WIDTH * MAP_HEIGHT] = [None; MAP_WIDTH * MAP_HEIGHT];
-    // set half of the map to grass
-    // for y in 0..MAP_HEIGHT {
-    //     for x in 0..MAP_WIDTH {
-    //         if x < MAP_WIDTH / 2 {
-    //             map[x + y * MAP_WIDTH] = Some(b'g');
-    //         }
-    //     }
-    // }
-    let constraints: &[&[u8]] = &[
-        &[0, 1],
-        &[0, 1, 2],
-        &[1, 2]
+    let mut map: Vec<Option<u8>> = vec![None; MAP_WIDTH * MAP_HEIGHT];
+    let constraints: &[(u8, &[u8])] = &[
+        (12, &[0, 1, 3]),
+        (5, &[0, 1, 2]),
+        (10, &[1, 2]),
+        (1, &[0]),
     ];
 
     let mut rng = rand::thread_rng();
@@ -94,14 +81,19 @@ fn main() {
 
         let possible_neighbors = get_possible_tiles(&map, constraints, x, y);
 
-        // pick random tile from possible neighbors
-        if let Some(tile) = possible_neighbors.as_slice().choose(&mut rng) {
-            map[i] = Some(*tile);
+        if possible_neighbors.len() == 0 {
+            println!("No solution found");
+            return;
         }
 
-        // display_map(&map);
-        // reset_cursor();
-        // std::thread::sleep(std::time::Duration::from_millis(10));
+        let weights: Vec<_> = possible_neighbors
+            .iter()
+            .map(|tile| constraints[*tile as usize].0)
+            .collect();
+        let dist = WeightedIndex::new(&weights).unwrap();
+
+        // randomly choose a tile from the possible neighbors based on the weights
+        map[i] = Some(possible_neighbors[dist.sample(&mut rng)]);
     }
 
     display_map(&map);
@@ -119,6 +111,7 @@ fn display_map(map: &[Option<u8>]) {
                     0 => print!("\x1b[32m{}\x1b[0m", 'g'),
                     1 => print!("\x1b[33m{}\x1b[0m", 's'),
                     2 => print!("\x1b[34m{}\x1b[0m", 'w'),
+                    3 => print!("\x1b[31m{}\x1b[0m", 'h'),
                     _ => (),
                 }
             } else {
